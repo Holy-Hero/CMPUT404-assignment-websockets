@@ -58,6 +58,19 @@ class World:
     
     def world(self):
         return self.space
+    
+class Client:
+    def __init__(self):
+        self.queue = queue.Queue()
+
+    def put(self, v):
+        self.queue.put_nowait(v)
+
+    def get(self):
+        return self.queue.get()
+
+
+clients = list()
 
 myWorld = World()        
 
@@ -66,14 +79,21 @@ def set_listener( entity, data ):
     for client in clients:
         client.put(json.dump({entity: data}))
 
+
+def send_all(msg):
+    for client in clients:
+        client.put(msg)
+
+    
+
 myWorld.add_set_listener( set_listener )
         
 @app.route('/')
 def hello():
     '''Return something coherent here.. perhaps redirect to /static/index.html '''
-    return flask.redirect("/static/index.html", code=302)
+    return flask.redirect("/static/index.html")
 
-def read_ws(ws,client):
+def read_ws(ws, client):
     '''A greenlet function that reads from the websocket and updates the world'''
     # https://github.com/uofa-cmput404/cmput404-slides/blob/master/examples/WebSocketsExamples/broadcaster.py
     try:
@@ -81,11 +101,11 @@ def read_ws(ws,client):
             msg = ws.receive()
             if (msg is not None):
                 packet = json.loads(msg)
-                send_all_json(packet)
+                send_all(json.dumps(packet))
             else:
                 break
     except:
-        break
+       print("WS Error: ", msg) 
 
 @sockets.route('/subscribe')
 def subscribe_socket(ws):
@@ -138,9 +158,10 @@ def update(entity):
 def world():
     '''you should probably return the world here'''
     if request.method == "POST":
-        for key in flask_post_json().keys():
-            myWorld.update(entity, key, flask_post_json()[key])
-        return myWorld.get(entity)
+        data = flask_post_json()
+        for entity in data:
+            myWorld.set(entity, data[entity])
+        return myWorld.world()
     elif request.method == "GET":
         return myWorld.world()
 
